@@ -13,6 +13,7 @@ interface CLIArgs {
   fullSync?: boolean;
   sync?: boolean;
   syncRange?: string;
+  syncTransactions?: boolean;
   status?: boolean;
   stats?: boolean;
   health?: boolean;
@@ -51,6 +52,9 @@ function parseArgs(): CLIArgs {
           args.syncRange = syncRange;
         }
         break;
+      case "--sync-transactions":
+        args.syncTransactions = true;
+        break;
       case "--status":
         args.status = true;
         break;
@@ -88,6 +92,7 @@ Options:
   --full-sync            Perform full historical sync on startup
   --sync                 Sync all networks once and exit
   --sync-range <RANGE>   Sync specific range (format: startId-endId)
+  --sync-transactions    Sync all deposits and fills from first intent
   --status               Show monitor status and exit
   --stats                Show statistics and exit
   --health               Show health check and exit
@@ -221,6 +226,23 @@ async function main(): Promise<void> {
 
       await monitorService.stop();
       logger.info("Sync completed");
+      process.exit(0);
+    }
+
+    if (args.syncTransactions) {
+      await monitorService.start();
+
+      const enabledNetworks = Object.entries(config.networks)
+        .filter(([, enabled]) => enabled)
+        .map(([network]) => network as NetworkName);
+
+      for (const network of enabledNetworks) {
+        logger.info(`Syncing transactions for network ${network}`);
+        await monitorService.syncNetworkTransactions(network);
+      }
+
+      await monitorService.stop();
+      logger.info("Transaction sync completed");
       process.exit(0);
     }
 

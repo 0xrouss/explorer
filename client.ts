@@ -289,33 +289,65 @@ export class ArcanaClient {
 
   private async queryCosmosTransactions(limit: number = 10000) {
     const rpcUrl = `${this.cosmosUrl}/`;
+    const allTxs: any[] = [];
+    let page = 1;
+    let hasMore = true;
+    const perPage = Math.min(limit, 100); // Use smaller page size for better performance
 
-    const body = {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tx_search",
-      params: {
-        query: "message.action='/xarchain.chainabstraction.MsgDoubleCheckTx'",
-        prove: false,
-        page: "1",
-        per_page: limit.toString(),
-        order_by: "desc",
-      },
-    };
+    while (hasMore && allTxs.length < limit) {
+      const body = {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tx_search",
+        params: {
+          query: "message.action='/xarchain.chainabstraction.MsgDoubleCheckTx'",
+          prove: false,
+          page: page.toString(),
+          per_page: perPage.toString(),
+          order_by: "desc",
+        },
+      };
 
-    const response = await fetch(rpcUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+      const response = await fetch(rpcUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.result?.txs || result.result.txs.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      allTxs.push(...result.result.txs);
+
+      // Check if we've reached the total count or got fewer results than requested
+      if (result.result.txs.length < perPage) {
+        hasMore = false;
+      }
+
+      page++;
+
+      // Safety check to prevent infinite loops
+      if (page > 1000) {
+        console.warn("Reached maximum page limit (1000), stopping pagination");
+        break;
+      }
     }
 
-    return await response.json();
+    return {
+      result: {
+        txs: allTxs.slice(0, limit), // Ensure we don't exceed the requested limit
+      },
+    };
   }
 
   private decodeDoubleCheckTx(txBase64: string): any[] {
@@ -340,7 +372,7 @@ export class ArcanaClient {
   private formatIntents(response: any): Intent[] {
     if (!response.requestForFunds) return [];
 
-    return response.requestForFunds.map((intent) => ({
+    return response.requestForFunds.map((intent: any) => ({
       id: toNumber(intent.id),
       user: intent.user,
       expiry: toNumber(intent.expiry),
@@ -355,7 +387,7 @@ export class ArcanaClient {
         ? cleanAddress(toHex(intent.fulfilledBy))
         : null,
       fulfilledAt: toNumber(intent.fulfilledAt),
-      sources: intent.sources.map((s) => ({
+      sources: intent.sources.map((s: any) => ({
         universe: s.universe,
         chainID: bytesToNumber(s.chainID),
         tokenAddress: cleanAddress(toHex(s.tokenAddress)),
@@ -363,11 +395,11 @@ export class ArcanaClient {
         status: s.status,
         collectionFeeRequired: s.collectionFeeRequired,
       })),
-      destinations: intent.destinations.map((d) => ({
+      destinations: intent.destinations.map((d: any) => ({
         tokenAddress: cleanAddress(toHex(d.tokenAddress)),
         value: toBigInt(d.value).toString(),
       })),
-      signatureData: intent.signatureData.map((sig) => ({
+      signatureData: intent.signatureData.map((sig: any) => ({
         universe: sig.universe,
         address: cleanAddress(toHex(sig.address)),
         signature: toHex(sig.signature),

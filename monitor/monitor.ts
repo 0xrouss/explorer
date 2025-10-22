@@ -210,6 +210,17 @@ export class MonitorService {
     this.logger.info("Sync completed for all networks");
   }
 
+  async syncNetworkTransactions(network: NetworkName): Promise<void> {
+    const monitor = this.monitors.get(network);
+    if (!monitor) {
+      throw new Error(`Monitor for network ${network} not found`);
+    }
+
+    this.logger.info(`Starting transaction sync for network ${network}`);
+    await monitor.syncAllTransactions();
+    this.logger.info(`Transaction sync completed for network ${network}`);
+  }
+
   getMonitor(network: NetworkName): NetworkMonitor | undefined {
     return this.monitors.get(network);
   }

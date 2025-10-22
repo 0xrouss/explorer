@@ -639,4 +639,163 @@ export class NetworkMonitor {
       lastSync: new Date(),
     };
   }
+
+  /**
+   * Sync all deposits and fills starting from the first intent
+   * This method fetches all historical transactions and processes them
+   */
+  async syncAllTransactions(): Promise<void> {
+    try {
+      this.logger.syncLog(
+        this.config.network,
+        "Starting transaction sync from first intent"
+      );
+
+      // Get the first intent ID from the database
+      const firstIntentId = await this.getFirstIntentId();
+      if (firstIntentId === null) {
+        this.logger.syncLog(
+          this.config.network,
+          "No intents found in database, skipping transaction sync"
+        );
+        return;
+      }
+
+      this.logger.syncLog(
+        this.config.network,
+        `First intent ID: ${firstIntentId}`
+      );
+
+      // Fetch all transactions using the improved pagination
+      this.logger.syncLog(
+        this.config.network,
+        "Fetching all historical transactions..."
+      );
+      const [allFills, allDeposits] = await Promise.all([
+        this.client.queryFills(),
+        this.client.queryDeposits(),
+      ]);
+
+      this.logger.syncLog(
+        this.config.network,
+        `Fetched ${allFills.length} fills and ${allDeposits.length} deposits`
+      );
+
+      // Get all intent IDs from the database
+      const allIntentIds = await this.getAllIntentIds();
+      const intentIdSet = new Set(allIntentIds);
+
+      this.logger.syncLog(
+        this.config.network,
+        `Processing transactions for ${allIntentIds.length} intents`
+      );
+
+      // Filter transactions to only include those for intents in our database
+      const relevantFills = allFills.filter((fill) =>
+        intentIdSet.has(fill.intentId)
+      );
+      const relevantDeposits = allDeposits.filter((deposit) =>
+        intentIdSet.has(deposit.intentId)
+      );
+
+      this.logger.syncLog(
+        this.config.network,
+        `Found ${relevantFills.length} relevant fills and ${relevantDeposits.length} relevant deposits`
+      );
+
+      // Process fills in batches
+      if (relevantFills.length > 0) {
+        const batchSize = 1000; // Process in batches to avoid memory issues
+        for (let i = 0; i < relevantFills.length; i += batchSize) {
+          const batch = relevantFills.slice(i, i + batchSize);
+          await this.fillRepo.upsertFillTransactions(
+            batch,
+            this.config.network as NetworkType
+          );
+
+          this.logger.syncLog(
+            this.config.network,
+            `Processed fill batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(
+              relevantFills.length / batchSize
+            )} (${batch.length} fills)`
+          );
+        }
+      }
+
+      // Process deposits in batches
+      if (relevantDeposits.length > 0) {
+        const batchSize = 1000; // Process in batches to avoid memory issues
+        for (let i = 0; i < relevantDeposits.length; i += batchSize) {
+          const batch = relevantDeposits.slice(i, i + batchSize);
+          await this.depositRepo.upsertDepositTransactions(
+            batch,
+            this.config.network as NetworkType
+          );
+
+          this.logger.syncLog(
+            this.config.network,
+            `Processed deposit batch ${
+              Math.floor(i / batchSize) + 1
+            }/${Math.ceil(relevantDeposits.length / batchSize)} (${
+              batch.length
+            } deposits)`
+          );
+        }
+      }
+
+      this.logger.syncLog(
+        this.config.network,
+        "Transaction sync completed successfully",
+        {
+          totalFills: relevantFills.length,
+          totalDeposits: relevantDeposits.length,
+        }
+      );
+    } catch (error) {
+      this.logger.errorLog(
+        this.config.network,
+        "Transaction sync failed",
+        error instanceof Error ? error : new Error(String(error))
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get the first intent ID from the database
+   */
+  private async getFirstIntentId(): Promise<number | null> {
+    try {
+      const result = await this.intentRepo.getMinIntentId(
+        this.config.network as NetworkType
+      );
+      return result;
+    } catch (error) {
+      this.logger.errorLog(
+        this.config.network,
+        "Failed to get first intent ID",
+        error instanceof Error ? error : new Error(String(error))
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Get all intent IDs from the database
+   */
+  private async getAllIntentIds(): Promise<number[]> {
+    try {
+      const result = await this.intentRepo.getAllIntentIds(
+        this.config.network as NetworkType
+      );
+      return result;
+    } catch (error) {
+      this.logger.errorLog(
+        this.config.network,
+        "Failed to get all intent IDs",
+        error instanceof Error ? error : new Error(String(error))
+      );
+      return [];
+    }
+  }
 }

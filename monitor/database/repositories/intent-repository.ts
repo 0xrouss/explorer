@@ -316,4 +316,39 @@ export class IntentRepository {
     );
     return result.rows[0] || null;
   }
+
+  async getMinIntentId(network?: NetworkType): Promise<number | null> {
+    let query = "SELECT MIN(id) as min_id FROM intents";
+    const params: any[] = [];
+
+    if (network) {
+      query += " WHERE network = $1";
+      params.push(network);
+    }
+
+    const result = await this.db.query(query, params);
+    const minId = result.rows[0]?.min_id;
+
+    // Convert to number if it exists
+    if (minId === null || minId === undefined) {
+      return null;
+    }
+
+    return parseInt(minId, 10);
+  }
+
+  async getAllIntentIds(network?: NetworkType): Promise<number[]> {
+    let query = "SELECT id FROM intents";
+    const params: any[] = [];
+
+    if (network) {
+      query += " WHERE network = $1";
+      params.push(network);
+    }
+
+    query += " ORDER BY id ASC";
+
+    const result = await this.db.query(query, params);
+    return result.rows.map((row: any) => parseInt(row.id, 10));
+  }
 }
