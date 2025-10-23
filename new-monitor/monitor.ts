@@ -4,8 +4,16 @@ import {
   IntentRepository,
   FillRepository,
   DepositRepository,
+  EvmFillRepository,
+  EvmDepositRepository,
   type IntentRow,
 } from "./database";
+import {
+  createSyncersForNetwork,
+  getChainsForNetwork,
+  type EvmChainSyncer,
+  type ChainConfig,
+} from "./evm";
 
 /**
  * Monitor for a single network
@@ -18,6 +26,10 @@ export class Monitor {
   private intentRepo: IntentRepository;
   private fillRepo: FillRepository;
   private depositRepo: DepositRepository;
+  private evmFillRepo: EvmFillRepository;
+  private evmDepositRepo: EvmDepositRepository;
+  private evmSyncers: Map<number, EvmChainSyncer>;
+  private chainConfigs: ChainConfig[];
   private isRunning = false;
   private pollIntervalMs = 10000; // 10 seconds
 
@@ -28,6 +40,16 @@ export class Monitor {
     this.intentRepo = new IntentRepository(this.db);
     this.fillRepo = new FillRepository(this.db);
     this.depositRepo = new DepositRepository(this.db);
+    this.evmFillRepo = new EvmFillRepository(this.db);
+    this.evmDepositRepo = new EvmDepositRepository(this.db);
+
+    // Initialize EVM syncers for this network
+    this.chainConfigs = getChainsForNetwork(network);
+    this.evmSyncers = createSyncersForNetwork(this.chainConfigs);
+
+    console.log(
+      `[${this.network}] Initialized ${this.evmSyncers.size} EVM chain syncers`
+    );
   }
 
   /**
@@ -275,6 +297,42 @@ export class Monitor {
         networkIntentsMap.set(intent.id, intent);
       }
 
+      // Debug: Verify Map creation worked for the latest intent
+      const latestIntentId = Math.max(...allNetworkIntents.map((i) => i.id));
+      const mapLatestIntent = networkIntentsMap.get(latestIntentId);
+      if (mapLatestIntent) {
+        console.log(
+          `[${this.network}] Latest intent ${latestIntentId} found in map: fulfilled=${mapLatestIntent.fulfilled}`
+        );
+      } else {
+        console.log(
+          `[${this.network}] Latest intent ${latestIntentId} NOT found in map despite being in raw data!`
+        );
+      }
+
+      // Debug: Log the range of intents fetched from network
+      if (allNetworkIntents.length > 0) {
+        const minId = Math.min(...allNetworkIntents.map((i) => i.id));
+        const maxId = Math.max(...allNetworkIntents.map((i) => i.id));
+        console.log(
+          `[${this.network}] Network query returned intents ${minId} to ${maxId} (${allNetworkIntents.length} total)`
+        );
+
+        // Debug: Check if the latest intent is actually in the results
+        const latestIntent = allNetworkIntents.find(
+          (i) => i.id === latestIntentId
+        );
+        if (latestIntent) {
+          console.log(
+            `[${this.network}] Latest intent ${latestIntentId} found in network data: fulfilled=${latestIntent.fulfilled}, refunded=${latestIntent.refunded}, deposited=${latestIntent.deposited}`
+          );
+        } else {
+          console.log(
+            `[${this.network}] Latest intent ${latestIntentId} NOT found in network data despite being in range`
+          );
+        }
+      }
+
       console.log(
         `[${this.network}] Comparing ${pendingIntents.length} pending intents with network data...`
       );
@@ -294,12 +352,32 @@ export class Monitor {
           }
 
           // Look up the intent in the network data
-          const networkIntent = networkIntentsMap.get(dbIntent.id);
+          // Convert database ID to number for Map lookup (database returns string, Map uses number)
+          const intentId = Number(dbIntent.id);
+          console.log(
+            `[${this.network}] Looking up intent ${
+              dbIntent.id
+            } (converted to ${intentId}, type: ${typeof intentId}) in map...`
+          );
+
+          const networkIntent = networkIntentsMap.get(intentId);
+          console.log(
+            `[${this.network}] Map lookup result for ${intentId}: ${
+              networkIntent ? "FOUND" : "NOT FOUND"
+            }`
+          );
 
           if (!networkIntent) {
             console.warn(
-              `[${this.network}] Intent ${dbIntent.id} not found on network`
+              `[${this.network}] Intent ${dbIntent.id} not found on network (network has ${allNetworkIntents.length} intents, max ID: ${networkMaxId})`
             );
+            // Debug: Check if the intent exists in the raw data but not in the map
+            const rawIntent = allNetworkIntents.find((i) => i.id === intentId);
+            if (rawIntent) {
+              console.warn(
+                `[${this.network}] Intent ${dbIntent.id} exists in raw data but not in map! This is a bug.`
+              );
+            }
             notFound++;
             continue;
           }
@@ -601,8 +679,14 @@ export class Monitor {
         // Update pending intents (status changes)
         await this.updatePendingIntents();
 
-        // Update transactions (fills and deposits)
+        // Update transactions (fills and deposits from Cosmos)
         await this.updateTransactions();
+
+        // Update EVM events (fills and deposits from EVM chains)
+        await this.updateEvmEvents();
+
+        // Link EVM events to intents (reconciliation job)
+        await this.linkEvmEventsToIntents();
       } catch (error) {
         console.error(`[${this.network}] Error in monitoring loop:`, error);
       }
@@ -660,9 +744,34 @@ export class Monitor {
         return { fetched: 0, inserted: 0, failed: 0 };
       }
 
-      // Insert all fills into the database
+      // Get existing fill hashes from database (Cosmos txs are immutable, so we only insert new ones)
       console.log(
-        `[${this.network}] Inserting fill transactions into database...`
+        `[${this.network}] Checking for existing fill transactions...`
+      );
+      const sql = this.db.getClient();
+      const existingFills = (await sql`
+        SELECT cosmos_hash FROM fill_transactions
+      `) as Array<{ cosmos_hash: string }>;
+
+      const existingHashes = new Set(existingFills.map((f) => f.cosmos_hash));
+
+      // Filter for new fills only
+      const newFills = fills.filter(
+        (fill) => !existingHashes.has(fill.cosmosHash)
+      );
+
+      console.log(
+        `[${this.network}] Found ${newFills.length} new fills to insert (${existingFills.length} already in database)`
+      );
+
+      if (newFills.length === 0) {
+        console.log(`[${this.network}] No new fill transactions to sync`);
+        return { fetched: fills.length, inserted: 0, failed: 0 };
+      }
+
+      // Insert only new fills into the database
+      console.log(
+        `[${this.network}] Inserting ${newFills.length} new fill transactions...`
       );
 
       let inserted = 0;
@@ -670,8 +779,8 @@ export class Monitor {
 
       // Use batch upsert for better performance
       try {
-        await this.fillRepo.upsertFills(fills);
-        inserted = fills.length;
+        await this.fillRepo.upsertFills(newFills);
+        inserted = newFills.length;
 
         console.log(
           `[${this.network}] ✓ Inserted ${inserted} fill transactions in batch`
@@ -683,14 +792,14 @@ export class Monitor {
         );
 
         // Fallback to individual inserts if batch fails
-        for (const fill of fills) {
+        for (const fill of newFills) {
           try {
             await this.fillRepo.upsertFill(fill);
             inserted++;
 
             if (inserted % 50 === 0) {
               console.log(
-                `[${this.network}] Progress: ${inserted}/${fills.length} fills inserted`
+                `[${this.network}] Progress: ${inserted}/${newFills.length} fills inserted`
               );
             }
           } catch (error) {
@@ -745,9 +854,36 @@ export class Monitor {
         return { fetched: 0, inserted: 0, failed: 0 };
       }
 
-      // Insert all deposits into the database
+      // Get existing deposit hashes from database (Cosmos txs are immutable, so we only insert new ones)
       console.log(
-        `[${this.network}] Inserting deposit transactions into database...`
+        `[${this.network}] Checking for existing deposit transactions...`
+      );
+      const sql = this.db.getClient();
+      const existingDeposits = (await sql`
+        SELECT cosmos_hash FROM deposit_transactions
+      `) as Array<{ cosmos_hash: string }>;
+
+      const existingHashes = new Set(
+        existingDeposits.map((d) => d.cosmos_hash)
+      );
+
+      // Filter for new deposits only
+      const newDeposits = deposits.filter(
+        (deposit) => !existingHashes.has(deposit.cosmosHash)
+      );
+
+      console.log(
+        `[${this.network}] Found ${newDeposits.length} new deposits to insert (${existingDeposits.length} already in database)`
+      );
+
+      if (newDeposits.length === 0) {
+        console.log(`[${this.network}] No new deposit transactions to sync`);
+        return { fetched: deposits.length, inserted: 0, failed: 0 };
+      }
+
+      // Insert only new deposits into the database
+      console.log(
+        `[${this.network}] Inserting ${newDeposits.length} new deposit transactions...`
       );
 
       let inserted = 0;
@@ -755,8 +891,8 @@ export class Monitor {
 
       // Use batch upsert for better performance
       try {
-        await this.depositRepo.upsertDeposits(deposits);
-        inserted = deposits.length;
+        await this.depositRepo.upsertDeposits(newDeposits);
+        inserted = newDeposits.length;
 
         console.log(
           `[${this.network}] ✓ Inserted ${inserted} deposit transactions in batch`
@@ -768,14 +904,14 @@ export class Monitor {
         );
 
         // Fallback to individual inserts if batch fails
-        for (const deposit of deposits) {
+        for (const deposit of newDeposits) {
           try {
             await this.depositRepo.upsertDeposit(deposit);
             inserted++;
 
             if (inserted % 50 === 0) {
               console.log(
-                `[${this.network}] Progress: ${inserted}/${deposits.length} deposits inserted`
+                `[${this.network}] Progress: ${inserted}/${newDeposits.length} deposits inserted`
               );
             }
           } catch (error) {
@@ -828,6 +964,303 @@ export class Monitor {
       fills: fillResults,
       deposits: depositResults,
     };
+  }
+
+  /**
+   * Sync EVM events for a single chain
+   */
+  async syncEvmChain(
+    chainId: number,
+    fromBlock?: bigint,
+    toBlock?: bigint
+  ): Promise<{
+    chainId: number;
+    chainName: string;
+    fillEvents: number;
+    depositEvents: number;
+    fromBlock: bigint;
+    toBlock: bigint;
+  }> {
+    const syncer = this.evmSyncers.get(chainId);
+    if (!syncer) {
+      throw new Error(`No syncer found for chain ID ${chainId}`);
+    }
+
+    const config = syncer.getChainConfig();
+
+    try {
+      // If toBlock not specified, get current block
+      const currentBlock = toBlock || (await syncer.getCurrentBlockNumber());
+
+      // If fromBlock not specified, get last synced block from database
+      const lastSyncedFillBlock =
+        fromBlock || (await this.evmFillRepo.getMaxBlockNumber(chainId));
+      const lastSyncedDepositBlock =
+        fromBlock || (await this.evmDepositRepo.getMaxBlockNumber(chainId));
+
+      // Use the minimum of the two (or deployment block if both are 0)
+      const startBlock =
+        lastSyncedFillBlock === 0n && lastSyncedDepositBlock === 0n
+          ? config.deploymentBlock
+          : lastSyncedFillBlock < lastSyncedDepositBlock
+          ? lastSyncedFillBlock
+          : lastSyncedDepositBlock;
+
+      // Don't sync if we're already up to date
+      if (startBlock >= currentBlock) {
+        return {
+          chainId,
+          chainName: config.name,
+          fillEvents: 0,
+          depositEvents: 0,
+          fromBlock: startBlock,
+          toBlock: currentBlock,
+        };
+      }
+
+      // If starting from deployment block, use it directly; otherwise increment by 1
+      const actualFromBlock =
+        startBlock === config.deploymentBlock ? startBlock : startBlock + 1n;
+
+      console.log(
+        `[${this.network}/${config.name}] Syncing blocks ${actualFromBlock} to ${currentBlock}...`
+      );
+
+      // Fetch and store events incrementally (batch by batch)
+      const { totalFills, totalDeposits } = await syncer.fetchAndProcessBatches(
+        actualFromBlock,
+        currentBlock,
+        async (fills, deposits) => {
+          // Store this batch immediately
+          if (fills.length > 0) {
+            await this.evmFillRepo.upsertFillEvents(fills);
+          }
+          if (deposits.length > 0) {
+            await this.evmDepositRepo.upsertDepositEvents(deposits);
+          }
+        }
+      );
+
+      console.log(
+        `[${this.network}/${config.name}] ✓ Synced ${totalFills} fills, ${totalDeposits} deposits`
+      );
+
+      return {
+        chainId,
+        chainName: config.name,
+        fillEvents: totalFills,
+        depositEvents: totalDeposits,
+        fromBlock: actualFromBlock,
+        toBlock: currentBlock,
+      };
+    } catch (error) {
+      console.error(
+        `[${this.network}/${config.name}] Error syncing EVM events:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Sync EVM events for all chains in the network
+   */
+  async syncAllEvmChains(): Promise<{
+    totalFillEvents: number;
+    totalDepositEvents: number;
+    results: Array<{
+      chainId: number;
+      chainName: string;
+      fillEvents: number;
+      depositEvents: number;
+      success: boolean;
+      error?: string;
+    }>;
+  }> {
+    console.log(
+      `\n[${this.network}] Starting EVM event sync for ${this.evmSyncers.size} chains...\n`
+    );
+
+    const results: Array<{
+      chainId: number;
+      chainName: string;
+      fillEvents: number;
+      depositEvents: number;
+      success: boolean;
+      error?: string;
+    }> = [];
+
+    let totalFillEvents = 0;
+    let totalDepositEvents = 0;
+
+    // Sync all chains in parallel
+    const syncPromises = Array.from(this.evmSyncers.entries()).map(
+      async ([chainId, syncer]) => {
+        const config = syncer.getChainConfig();
+        try {
+          const result = await this.syncEvmChain(chainId);
+          totalFillEvents += result.fillEvents;
+          totalDepositEvents += result.depositEvents;
+
+          results.push({
+            chainId: result.chainId,
+            chainName: result.chainName,
+            fillEvents: result.fillEvents,
+            depositEvents: result.depositEvents,
+            success: true,
+          });
+        } catch (error) {
+          console.error(
+            `[${this.network}/${config.name}] Failed to sync:`,
+            error
+          );
+          results.push({
+            chainId,
+            chainName: config.name,
+            fillEvents: 0,
+            depositEvents: 0,
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    );
+
+    await Promise.all(syncPromises);
+
+    console.log(`\n[${this.network}] ✓ EVM event sync completed!`);
+    console.log(`  Total fills:    ${totalFillEvents}`);
+    console.log(`  Total deposits: ${totalDepositEvents}`);
+
+    // Show per-chain summary
+    const successCount = results.filter((r) => r.success).length;
+    const failureCount = results.filter((r) => !r.success).length;
+    console.log(`  Chains synced:  ${successCount}/${this.evmSyncers.size}`);
+    if (failureCount > 0) {
+      console.log(`  Chains failed:  ${failureCount}`);
+    }
+    console.log();
+
+    return {
+      totalFillEvents,
+      totalDepositEvents,
+      results,
+    };
+  }
+
+  /**
+   * Update EVM events (check for new events on all chains)
+   */
+  async updateEvmEvents(): Promise<{
+    totalFillEvents: number;
+    totalDepositEvents: number;
+  }> {
+    try {
+      const result = await this.syncAllEvmChains();
+      return {
+        totalFillEvents: result.totalFillEvents,
+        totalDepositEvents: result.totalDepositEvents,
+      };
+    } catch (error) {
+      console.error(`[${this.network}] Failed to update EVM events:`, error);
+      return {
+        totalFillEvents: 0,
+        totalDepositEvents: 0,
+      };
+    }
+  }
+
+  /**
+   * Link unlinked EVM events to intents by matching request_hash with intent signature hash
+   * This runs as a background job to reconcile events with their source intents
+   */
+  async linkEvmEventsToIntents(): Promise<{
+    linkedFills: number;
+    linkedDeposits: number;
+    remainingUnlinkedFills: number;
+    remainingUnlinkedDeposits: number;
+  }> {
+    try {
+      let linkedFills = 0;
+      let linkedDeposits = 0;
+
+      // Link fill events
+      const unlinkedFills = await this.evmFillRepo.getUnlinkedFillEvents();
+      console.log(
+        `[${this.network}] Found ${unlinkedFills.length} unlinked fill events`
+      );
+
+      for (const fillEvent of unlinkedFills) {
+        try {
+          const intentId = await this.intentRepo.findIntentIdByHash(
+            fillEvent.request_hash
+          );
+          if (intentId) {
+            await this.evmFillRepo.updateIntentId(fillEvent.id, intentId);
+            linkedFills++;
+          }
+        } catch (error) {
+          console.error(
+            `[${this.network}] Error linking fill event ${fillEvent.id}:`,
+            error
+          );
+        }
+      }
+
+      // Link deposit events
+      const unlinkedDeposits =
+        await this.evmDepositRepo.getUnlinkedDepositEvents();
+      console.log(
+        `[${this.network}] Found ${unlinkedDeposits.length} unlinked deposit events`
+      );
+
+      for (const depositEvent of unlinkedDeposits) {
+        try {
+          const intentId = await this.intentRepo.findIntentIdByHash(
+            depositEvent.request_hash
+          );
+          if (intentId) {
+            await this.evmDepositRepo.updateIntentId(depositEvent.id, intentId);
+            linkedDeposits++;
+          }
+        } catch (error) {
+          console.error(
+            `[${this.network}] Error linking deposit event ${depositEvent.id}:`,
+            error
+          );
+        }
+      }
+
+      const remainingUnlinkedFills =
+        await this.evmFillRepo.getUnlinkedFillEventCount();
+      const remainingUnlinkedDeposits =
+        await this.evmDepositRepo.getUnlinkedDepositEventCount();
+
+      console.log(
+        `[${this.network}] ✓ Linked ${linkedFills} fills, ${linkedDeposits} deposits`
+      );
+      console.log(
+        `[${this.network}] Remaining unlinked: ${remainingUnlinkedFills} fills, ${remainingUnlinkedDeposits} deposits\n`
+      );
+
+      return {
+        linkedFills,
+        linkedDeposits,
+        remainingUnlinkedFills,
+        remainingUnlinkedDeposits,
+      };
+    } catch (error) {
+      console.error(
+        `[${this.network}] Failed to link EVM events to intents:`,
+        error
+      );
+      return {
+        linkedFills: 0,
+        linkedDeposits: 0,
+        remainingUnlinkedFills: 0,
+        remainingUnlinkedDeposits: 0,
+      };
+    }
   }
 
   /**

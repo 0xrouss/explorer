@@ -86,6 +86,44 @@ CREATE TABLE IF NOT EXISTS deposit_transactions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- EVM Fill Events (from eth_getLogs)
+-- These are the source of truth for fill confirmations on destination chains
+CREATE TABLE IF NOT EXISTS evm_fill_events (
+    id SERIAL PRIMARY KEY,
+    request_hash VARCHAR(66) NOT NULL,
+    intent_id BIGINT REFERENCES intents(id) ON DELETE CASCADE,
+    chain_id BIGINT NOT NULL,
+    tx_hash VARCHAR(66) NOT NULL,
+    block_number BIGINT NOT NULL,
+    log_index INTEGER NOT NULL,
+    from_address VARCHAR(42) NOT NULL,
+    solver_address VARCHAR(42) NOT NULL,
+    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure uniqueness per transaction and log index
+    UNIQUE(tx_hash, log_index)
+);
+
+-- EVM Deposit Events (from eth_getLogs)
+-- These are the source of truth for deposit confirmations on source chains
+CREATE TABLE IF NOT EXISTS evm_deposit_events (
+    id SERIAL PRIMARY KEY,
+    request_hash VARCHAR(66) NOT NULL,
+    intent_id BIGINT REFERENCES intents(id) ON DELETE CASCADE,
+    chain_id BIGINT NOT NULL,
+    tx_hash VARCHAR(66) NOT NULL,
+    block_number BIGINT NOT NULL,
+    log_index INTEGER NOT NULL,
+    from_address VARCHAR(42) NOT NULL,
+    gas_refunded BOOLEAN DEFAULT FALSE,
+    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure uniqueness per transaction and log index
+    UNIQUE(tx_hash, log_index)
+);
+
 -- ============================================================================
 -- INDEXES
 -- ============================================================================
@@ -121,6 +159,24 @@ CREATE INDEX IF NOT EXISTS idx_fill_transactions_created_at ON fill_transactions
 -- Deposit transaction indexes
 CREATE INDEX IF NOT EXISTS idx_deposit_transactions_intent_id ON deposit_transactions(intent_id);
 CREATE INDEX IF NOT EXISTS idx_deposit_transactions_created_at ON deposit_transactions(created_at);
+
+-- EVM Fill event indexes
+CREATE INDEX IF NOT EXISTS idx_evm_fill_events_request_hash ON evm_fill_events(request_hash);
+CREATE INDEX IF NOT EXISTS idx_evm_fill_events_intent_id ON evm_fill_events(intent_id);
+CREATE INDEX IF NOT EXISTS idx_evm_fill_events_chain_id ON evm_fill_events(chain_id);
+CREATE INDEX IF NOT EXISTS idx_evm_fill_events_tx_hash ON evm_fill_events(tx_hash);
+CREATE INDEX IF NOT EXISTS idx_evm_fill_events_block_number ON evm_fill_events(block_number);
+CREATE INDEX IF NOT EXISTS idx_evm_fill_events_solver_address ON evm_fill_events(solver_address);
+CREATE INDEX IF NOT EXISTS idx_evm_fill_events_created_at ON evm_fill_events(created_at);
+
+-- EVM Deposit event indexes
+CREATE INDEX IF NOT EXISTS idx_evm_deposit_events_request_hash ON evm_deposit_events(request_hash);
+CREATE INDEX IF NOT EXISTS idx_evm_deposit_events_intent_id ON evm_deposit_events(intent_id);
+CREATE INDEX IF NOT EXISTS idx_evm_deposit_events_chain_id ON evm_deposit_events(chain_id);
+CREATE INDEX IF NOT EXISTS idx_evm_deposit_events_tx_hash ON evm_deposit_events(tx_hash);
+CREATE INDEX IF NOT EXISTS idx_evm_deposit_events_block_number ON evm_deposit_events(block_number);
+CREATE INDEX IF NOT EXISTS idx_evm_deposit_events_from_address ON evm_deposit_events(from_address);
+CREATE INDEX IF NOT EXISTS idx_evm_deposit_events_created_at ON evm_deposit_events(created_at);
 
 -- ============================================================================
 -- TRIGGERS

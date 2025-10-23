@@ -70,6 +70,32 @@ export interface DepositTransactionRow {
   created_at: Date;
 }
 
+export interface EvmFillEventRow {
+  id: number;
+  request_hash: string;
+  intent_id: number | null;
+  chain_id: number;
+  tx_hash: string;
+  block_number: number;
+  log_index: number;
+  from_address: string;
+  solver_address: string;
+  created_at: Date;
+}
+
+export interface EvmDepositEventRow {
+  id: number;
+  request_hash: string;
+  intent_id: number | null;
+  chain_id: number;
+  tx_hash: string;
+  block_number: number;
+  log_index: number;
+  from_address: string;
+  gas_refunded: boolean;
+  created_at: Date;
+}
+
 /**
  * Full intent with all related data
  */
@@ -79,4 +105,6 @@ export interface IntentWithRelations extends IntentRow {
   signatureData: IntentSignatureDataRow[];
   fills: FillTransactionRow[];
   deposits: DepositTransactionRow[];
+  evmFills: EvmFillEventRow[];
+  evmDeposits: EvmDepositEventRow[];
 }

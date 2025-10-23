@@ -8,6 +8,8 @@ import type {
   IntentSignatureDataRow,
   FillTransactionRow,
   DepositTransactionRow,
+  EvmFillEventRow,
+  EvmDepositEventRow,
 } from "../types";
 
 /**
@@ -133,20 +135,31 @@ export class IntentRepository {
     const intent = await this.getIntentById(id);
     if (!intent) return null;
 
-    const [sources, destinations, signatureData, fills, deposits] =
-      (await Promise.all([
-        sql`SELECT * FROM intent_sources WHERE intent_id = ${id}`,
-        sql`SELECT * FROM intent_destinations WHERE intent_id = ${id}`,
-        sql`SELECT * FROM intent_signature_data WHERE intent_id = ${id}`,
-        sql`SELECT * FROM fill_transactions WHERE intent_id = ${id}`,
-        sql`SELECT * FROM deposit_transactions WHERE intent_id = ${id}`,
-      ])) as [
-        IntentSourceRow[],
-        IntentDestinationRow[],
-        IntentSignatureDataRow[],
-        FillTransactionRow[],
-        DepositTransactionRow[]
-      ];
+    const [
+      sources,
+      destinations,
+      signatureData,
+      fills,
+      deposits,
+      evmFills,
+      evmDeposits,
+    ] = (await Promise.all([
+      sql`SELECT * FROM intent_sources WHERE intent_id = ${id}`,
+      sql`SELECT * FROM intent_destinations WHERE intent_id = ${id}`,
+      sql`SELECT * FROM intent_signature_data WHERE intent_id = ${id}`,
+      sql`SELECT * FROM fill_transactions WHERE intent_id = ${id}`,
+      sql`SELECT * FROM deposit_transactions WHERE intent_id = ${id}`,
+      sql`SELECT * FROM evm_fill_events WHERE intent_id = ${id}`,
+      sql`SELECT * FROM evm_deposit_events WHERE intent_id = ${id}`,
+    ])) as [
+      IntentSourceRow[],
+      IntentDestinationRow[],
+      IntentSignatureDataRow[],
+      FillTransactionRow[],
+      DepositTransactionRow[],
+      EvmFillEventRow[],
+      EvmDepositEventRow[]
+    ];
 
     return {
       ...intent,
@@ -155,6 +168,8 @@ export class IntentRepository {
       signatureData,
       fills,
       deposits,
+      evmFills,
+      evmDeposits,
     };
   }
 
@@ -226,5 +241,18 @@ export class IntentRepository {
       SELECT COUNT(*) as count FROM intents
     `) as Array<{ count: number }>;
     return Number(result[0]?.count || 0);
+  }
+
+  /**
+   * Find intent ID by signature data hash (for linking EVM events)
+   */
+  async findIntentIdByHash(hash: string): Promise<number | null> {
+    const sql = this.db.getClient();
+    const result = (await sql`
+      SELECT intent_id FROM intent_signature_data 
+      WHERE hash = ${hash}
+      LIMIT 1
+    `) as Array<{ intent_id: number }>;
+    return result[0]?.intent_id || null;
   }
 }

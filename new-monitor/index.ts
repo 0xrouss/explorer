@@ -44,11 +44,11 @@ async function main() {
       console.log(`✓ Intents are up to date!\n`);
     }
 
-    // Sync all transactions (fills and deposits)
-    console.log(`Syncing transactions...\n`);
+    // Sync all transactions (fills and deposits from Cosmos)
+    console.log(`Syncing Cosmos transactions...\n`);
     const transactionResults = await monitor.syncAllTransactions();
 
-    console.log(`Transaction Sync Summary:`);
+    console.log(`Cosmos Transaction Sync Summary:`);
     console.log(
       `  ✓ Fills synced: ${transactionResults.fills.inserted}/${transactionResults.fills.fetched}`
     );
@@ -61,6 +61,47 @@ async function main() {
     ) {
       console.log(
         `  ✗ Failed: ${transactionResults.fills.failed} fills, ${transactionResults.deposits.failed} deposits`
+      );
+    }
+
+    // Sync all EVM events (fills and deposits from EVM chains)
+    console.log(`\nSyncing EVM events...\n`);
+    const evmResults = await monitor.syncAllEvmChains();
+
+    console.log(`EVM Event Sync Summary:`);
+    console.log(`  ✓ Total fills:    ${evmResults.totalFillEvents}`);
+    console.log(`  ✓ Total deposits: ${evmResults.totalDepositEvents}`);
+
+    const evmSuccessCount = evmResults.results.filter((r) => r.success).length;
+    const evmFailCount = evmResults.results.filter((r) => !r.success).length;
+    console.log(`  ✓ Chains synced:  ${evmSuccessCount}`);
+    if (evmFailCount > 0) {
+      console.log(`  ✗ Chains failed:  ${evmFailCount}`);
+      // Show which chains failed
+      evmResults.results
+        .filter((r) => !r.success)
+        .forEach((r) => {
+          console.log(
+            `    - ${r.chainName} (Chain ID ${r.chainId}): ${r.error}`
+          );
+        });
+    }
+
+    // Link EVM events to intents (reconciliation)
+    console.log(`\nLinking EVM events to intents...\n`);
+    const linkResults = await monitor.linkEvmEventsToIntents();
+    console.log(`Link Summary:`);
+    console.log(`  ✓ Linked fills:    ${linkResults.linkedFills}`);
+    console.log(`  ✓ Linked deposits: ${linkResults.linkedDeposits}`);
+    if (
+      linkResults.remainingUnlinkedFills > 0 ||
+      linkResults.remainingUnlinkedDeposits > 0
+    ) {
+      console.log(
+        `  ⚠ Unlinked fills:    ${linkResults.remainingUnlinkedFills}`
+      );
+      console.log(
+        `  ⚠ Unlinked deposits: ${linkResults.remainingUnlinkedDeposits}`
       );
     }
 

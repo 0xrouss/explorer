@@ -17,11 +17,6 @@ const NETWORKS = {
     grpcUrl: "https://grpc-folly.arcana.network",
     cosmosUrl: "https://cosmos04-dev.arcana.network:26650",
   },
-  CERISE: {
-    name: "Cerise (Mainnet)",
-    grpcUrl: "https://mimosa-dash-grpc.arcana.network",
-    cosmosUrl: "https://cosmos01-dev.arcana.network:26650",
-  },
 } as const;
 
 export type NetworkName = keyof typeof NETWORKS;
