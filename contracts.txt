@@ -1,0 +1,10 @@
+CORAL: 
+Ethereum, Optimism, Polygon, Arbitrum, Avalanche, Base, Scroll, Kaia, Bnb, HyperEVM
+0xbada557252d286e45a1ad73f32479062d4e2e86b
+
+Sophon
+0xB61fAdeBccCb15823b64bf47829d32eeb4A08930
+
+FOLLY:
+Optimism Sepolia, Polygon Amoy, Arbitrum Sepolia, Base Sepolia, Sepolia, Monad Testnet
+0xf0111ede031a4377c34a4ad900f1e633e41055dc
