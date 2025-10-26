@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import "./globals.css";
+import ContextProvider from "@/context";
+import { headers } from "next/headers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,17 +21,22 @@ export const metadata: Metadata = {
     "Explore intents across the Nexus ecosystem - CORAL, FOLLY, and CERISE networks",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const headersObj = await headers();
+  const cookies = headersObj.get("cookie");
+
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ErrorBoundary>{children}</ErrorBoundary>
+        <ContextProvider cookies={cookies}>
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </ContextProvider>
       </body>
     </html>
   );

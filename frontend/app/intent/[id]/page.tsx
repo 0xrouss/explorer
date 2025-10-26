@@ -164,9 +164,6 @@ export default function IntentDetailPage() {
                           <span className="text-sm font-medium text-text-primary">
                             {formatChainId(source.chain_id)}
                           </span>
-                          <span className="text-xs text-text-muted bg-[var(--bg-tertiary)] px-2 py-1 rounded">
-                            {source.universe}
-                          </span>
                         </div>
                         <div className="text-sm text-text-secondary font-medium">
                           {formatTokenValueSmart(
@@ -217,7 +214,7 @@ export default function IntentDetailPage() {
               {/* Destinations */}
               <div className="bg-bg-secondary border border-border-primary rounded-lg p-4">
                 <h4 className="text-sm font-medium text-text-secondary mb-3 flex items-center">
-                  <span className="w-2 h-2 bg-[var(--status-success)] rounded-full mr-2"></span>
+                  <span className="w-2 h-2 rounded-full mr-2"></span>
                   Destination Chain
                 </h4>
                 <div className="space-y-2">
@@ -225,9 +222,6 @@ export default function IntentDetailPage() {
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium text-text-primary">
                         {formatChainId(intent.destination_chain_id)}
-                      </span>
-                      <span className="text-xs text-text-muted bg-[var(--bg-tertiary)] px-2 py-1 rounded">
-                        {intent.destination_universe}
                       </span>
                     </div>
                     {destinations.length > 0 ? (
@@ -255,37 +249,43 @@ export default function IntentDetailPage() {
             </div>
 
             {/* Quick stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-border-primary">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-border-primary">
               <div className="text-center">
                 <div className="text-sm text-text-secondary mb-1">
                   Intent ID
                 </div>
                 <div className="flex items-center justify-center space-x-2">
-                  <span className="text-lg font-medium text-text-primary">
+                  <span className="text font-medium text-text-primary">
                     #{intent.id}
                   </span>
-                  <CopyButton text={intent.id.toString()} size="sm" />
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-sm text-text-secondary mb-1">User</div>
                 <div className="flex items-center justify-center space-x-2">
-                  <span className="text-sm text-text-primary font-mono">
-                    {formatAddress(intent.user_address)}
-                  </span>
-                  <CopyButton text={intent.user_address} size="sm" />
+                  {(() => {
+                    // Find universe 0 signature address, fallback to user_address
+                    const universe0Signature = signatures?.find(
+                      (sig: any) => sig.universe === 0
+                    );
+                    const displayAddress =
+                      universe0Signature?.address || intent.user_address;
+                    return (
+                      <>
+                        <AddressLink
+                          address={displayAddress}
+                          network={NETWORK}
+                          showFull={true}
+                        />
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
               <div className="text-center">
                 <div className="text-sm text-text-secondary mb-1">Created</div>
                 <div className="text-sm text-text-primary">
                   {formatDate(intent.created_at)}
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="text-sm text-text-secondary mb-1">Expires</div>
-                <div className="text-sm text-text-primary">
-                  {formatExpiryTime(intent.expiry)}
                 </div>
               </div>
             </div>
@@ -546,19 +546,60 @@ export default function IntentDetailPage() {
         {/* Technical Details - Collapsible */}
         <div className="bg-card-bg border border-card-border shadow-lg overflow-hidden sm:rounded-lg mb-8">
           <details className="group">
-            <summary className="px-4 py-5 sm:p-6 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors">
+            <summary className="px-6 py-6 cursor-pointer hover:bg-[var(--hover-bg)] transition-colors">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg leading-6 font-medium text-text-primary">
-                  Technical Details
-                </h3>
-                <div className="flex items-center space-x-4 text-sm text-text-secondary">
-                  <span>{signatures.length} signatures</span>
-                  <span>•</span>
-                  <span>
-                    {evmFills.length + evmDeposits.length} transactions
-                  </span>
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-gradient-to-br from-accent-blue to-blue-600 rounded-lg flex items-center justify-center">
+                    <svg
+                      className="w-4 h-4 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-text-primary">
+                      Technical Details
+                    </h3>
+                    <p className="text-sm text-text-secondary">
+                      Signatures, transactions, and blockchain data
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-6 text-sm">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-accent-blue rounded-full"></div>
+                    <span className="text-text-secondary">
+                      {signatures.length} signatures
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-accent-green rounded-full"></div>
+                    <span className="text-text-secondary">
+                      {evmFills.length} fills
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-accent-yellow rounded-full"></div>
+                    <span className="text-text-secondary">
+                      {evmDeposits.length} deposits
+                    </span>
+                  </div>
                   <svg
-                    className="w-5 h-5 transform group-open:rotate-180 transition-transform"
+                    className="w-5 h-5 text-text-secondary transform group-open:rotate-180 transition-transform"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -574,12 +615,184 @@ export default function IntentDetailPage() {
               </div>
             </summary>
 
-            <div className="px-4 py-5 sm:p-6 border-t border-border-primary">
+            <div className="px-6 py-6 border-t border-border-primary">
+              {/* Intent Metadata */}
+              {/* <div className="mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                  <div className="bg-bg-secondary border border-card-border rounded-lg p-4">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="w-6 h-6 bg-accent-blue/20 rounded-md flex items-center justify-center">
+                        <svg
+                          className="w-3 h-3 text-accent-blue"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                      </div>
+                      <h5 className="text-sm font-medium text-text-primary">
+                        Intent Metadata
+                      </h5>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-text-secondary">Nonce:</span>
+                        <span className="text-text-primary font-mono">
+                          {intent.nonce}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-text-secondary">
+                          Creation Block:
+                        </span>
+                        <span className="text-text-primary">
+                          {formatBlockNumber(intent.creation_block)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-text-secondary">
+                          Expiry Block:
+                        </span>
+                        <span className="text-text-primary">
+                          {formatBlockNumber(intent.expiry)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-bg-secondary border border-card-border rounded-lg p-4">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="w-6 h-6 bg-accent-green/20 rounded-md flex items-center justify-center">
+                        <svg
+                          className="w-3 h-3 text-accent-green"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M13 10V3L4 14h7v7l9-11h-7z"
+                          />
+                        </svg>
+                      </div>
+                      <h5 className="text-sm font-medium text-text-primary">
+                        Transaction Stats
+                      </h5>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-text-secondary">
+                          Total Fills:
+                        </span>
+                        <span className="text-text-primary">
+                          {evmFills.length}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-text-secondary">
+                          Total Deposits:
+                        </span>
+                        <span className="text-text-primary">
+                          {evmDeposits.length}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-text-secondary">
+                          Total Transactions:
+                        </span>
+                        <span className="text-text-primary">
+                          {evmFills.length + evmDeposits.length}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-bg-secondary border border-card-border rounded-lg p-4">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="w-6 h-6 bg-accent-purple/20 rounded-md flex items-center justify-center">
+                        <svg
+                          className="w-3 h-3 text-accent-purple"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
+                          />
+                        </svg>
+                      </div>
+                      <h5 className="text-sm font-medium text-text-primary">
+                        Signature Info
+                      </h5>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-text-secondary">
+                          Total Signatures:
+                        </span>
+                        <span className="text-text-primary">
+                          {signatures.length}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-text-secondary">Universes:</span>
+                        <span className="text-text-primary">
+                          {signatures.map((s) => s.universe).join(", ")}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-text-secondary">
+                          Fulfilled By:
+                        </span>
+                        <span className="text-text-primary">
+                          {intent.fulfilled_by
+                            ? formatAddress(intent.fulfilled_by)
+                            : "N/A"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div> */}
+
               {/* Signatures */}
               <div className="mb-8">
-                <h4 className="text-md font-medium text-text-primary mb-4">
-                  Signatures ({signatures.length})
-                </h4>
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-8 h-8 bg-gradient-to-br from-accent-blue to-blue-600 rounded-lg flex items-center justify-center">
+                    <svg
+                      className="w-4 h-4 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                      />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-text-primary">
+                      Signatures ({signatures.length})
+                    </h4>
+                    <p className="text-sm text-text-secondary">
+                      Cryptographic signatures from different universes
+                    </p>
+                  </div>
+                </div>
                 {signatures.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-[var(--table-border)]">
@@ -627,16 +840,55 @@ export default function IntentDetailPage() {
               {/* EVM Transactions */}
               {(evmFills.length > 0 || evmDeposits.length > 0) && (
                 <div>
-                  <h4 className="text-md font-medium text-text-primary mb-4">
-                    EVM Transactions
-                  </h4>
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="w-8 h-8 bg-gradient-to-br from-accent-green to-green-600 rounded-lg flex items-center justify-center">
+                      <svg
+                        className="w-4 h-4 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-semibold text-text-primary">
+                        EVM Transactions
+                      </h4>
+                      <p className="text-sm text-text-secondary">
+                        Blockchain transactions for fills and deposits
+                      </p>
+                    </div>
+                  </div>
 
                   {/* EVM Fill Events */}
                   {evmFills.length > 0 && (
                     <div className="mb-8">
-                      <h4 className="text-md font-medium text-text-primary mb-4">
-                        Fill Events ({evmFills.length})
-                      </h4>
+                      <div className="flex items-center space-x-3 mb-4">
+                        <div className="w-6 h-6 bg-accent-green/20 rounded-md flex items-center justify-center">
+                          <svg
+                            className="w-3 h-3 text-accent-green"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M13 10V3L4 14h7v7l9-11h-7z"
+                            />
+                          </svg>
+                        </div>
+                        <h5 className="text-md font-semibold text-text-primary">
+                          Fill Events ({evmFills.length})
+                        </h5>
+                      </div>
                       <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-[var(--table-border)]">
                           <thead className="bg-[var(--table-header-bg)]">
@@ -655,9 +907,6 @@ export default function IntentDetailPage() {
                               </th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
                                 From
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
-                                Created
                               </th>
                             </tr>
                           </thead>
@@ -702,9 +951,6 @@ export default function IntentDetailPage() {
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-text-primary">
                                   <div className="flex items-center space-x-2">
                                     <span>{formatChainId(fill.chain_id)}</span>
-                                    <span className="text-text-muted text-xs">
-                                      ({fill.chain_id})
-                                    </span>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-text-primary">
@@ -716,11 +962,12 @@ export default function IntentDetailPage() {
                                     network={NETWORK}
                                   />
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-text-primary font-mono">
-                                  {formatAddress(fill.from_address)}
-                                </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-text-primary">
-                                  {formatDate(fill.created_at)}
+                                  <AddressLink
+                                    address={fill.from_address}
+                                    network={NETWORK}
+                                    showFull={true}
+                                  />
                                 </td>
                               </tr>
                             ))}
@@ -733,9 +980,26 @@ export default function IntentDetailPage() {
                   {/* EVM Deposit Events */}
                   {evmDeposits.length > 0 && (
                     <div>
-                      <h4 className="text-md font-medium text-text-primary mb-4">
-                        Deposit Events ({evmDeposits.length})
-                      </h4>
+                      <div className="flex items-center space-x-3 mb-4">
+                        <div className="w-6 h-6 bg-accent-yellow/20 rounded-md flex items-center justify-center">
+                          <svg
+                            className="w-3 h-3 text-accent-yellow"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+                            />
+                          </svg>
+                        </div>
+                        <h5 className="text-md font-semibold text-text-primary">
+                          Deposit Events ({evmDeposits.length})
+                        </h5>
+                      </div>
                       <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-[var(--table-border)]">
                           <thead className="bg-[var(--table-header-bg)]">
@@ -754,9 +1018,6 @@ export default function IntentDetailPage() {
                               </th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
                                 Gas Refunded
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-text-secondary uppercase tracking-wider">
-                                Created
                               </th>
                             </tr>
                           </thead>
@@ -808,16 +1069,17 @@ export default function IntentDetailPage() {
                                     <span>
                                       {formatChainId(deposit.chain_id)}
                                     </span>
-                                    <span className="text-text-muted text-xs">
-                                      ({deposit.chain_id})
-                                    </span>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-text-primary">
                                   {formatBlockNumber(deposit.block_number)}
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-text-primary font-mono">
-                                  {formatAddress(deposit.from_address)}
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-text-primary">
+                                  <AddressLink
+                                    address={deposit.from_address}
+                                    network={NETWORK}
+                                    showFull={true}
+                                  />
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-text-primary">
                                   <span
@@ -829,9 +1091,6 @@ export default function IntentDetailPage() {
                                   >
                                     {deposit.gas_refunded ? "Yes" : "No"}
                                   </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-text-primary">
-                                  {formatDate(deposit.created_at)}
                                 </td>
                               </tr>
                             ))}

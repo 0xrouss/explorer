@@ -118,111 +118,142 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-bg-primary">
       {/* Header */}
-      <Header networkName="FULLY Network" />
+      <Header />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Network Stats */}
         {networkStats && (
           <div className="mb-8">
-            <div className="bg-card-bg overflow-hidden shadow rounded-lg">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg font-medium text-text-primary mb-4">
-                  Network Statistics
-                </h3>
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="bg-bg-secondary overflow-hidden shadow rounded-lg">
-                    <div className="p-5">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-accent-blue rounded-md flex items-center justify-center">
-                            <span className="text-white text-sm font-medium">
-                              I
-                            </span>
-                          </div>
+            <div className="bg-card-bg border border-card-border shadow-lg rounded-lg overflow-hidden">
+              <div className="px-6 py-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-semibold text-text-primary">
+                    Network Statistics
+                  </h3>
+                  <div className="h-1 w-12 bg-gradient-to-r from-accent-blue to-accent-purple rounded-full"></div>
+                </div>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                  {/* Total Intents */}
+                  <div className="bg-bg-secondary border border-card-border rounded-lg p-6 hover:shadow-md transition-all duration-200 hover:border-accent-blue/30">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-gradient-to-br from-accent-blue to-blue-600 rounded-lg flex items-center justify-center shadow-lg">
+                          <svg
+                            className="w-6 h-6 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                            />
+                          </svg>
                         </div>
-                        <div className="ml-5 w-0 flex-1">
-                          <dl>
-                            <dt className="text-sm font-medium text-text-secondary truncate">
-                              Total Intents
-                            </dt>
-                            <dd className="text-lg font-medium text-text-primary">
-                              {formatNumber(networkStats.totalIntents)}
-                            </dd>
-                          </dl>
-                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-text-secondary mb-1">
+                          Total Intents
+                        </p>
+                        <p className="text-2xl font-bold text-text-primary">
+                          {formatNumber(networkStats.totalIntents)}
+                        </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-bg-secondary overflow-hidden shadow rounded-lg">
-                    <div className="p-5">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                            <span className="text-white text-sm font-medium">
-                              U
-                            </span>
-                          </div>
+                  {/* Unique Users */}
+                  <div className="bg-bg-secondary border border-card-border rounded-lg p-6 hover:shadow-md transition-all duration-200 hover:border-accent-green/30">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-gradient-to-br from-accent-green to-green-600 rounded-lg flex items-center justify-center shadow-lg">
+                          <svg
+                            className="w-6 h-6 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
+                            />
+                          </svg>
                         </div>
-                        <div className="ml-5 w-0 flex-1">
-                          <dl>
-                            <dt className="text-sm font-medium text-text-secondary truncate">
-                              Unique Users
-                            </dt>
-                            <dd className="text-lg font-medium text-text-primary">
-                              {formatNumber(networkStats.uniqueUsers)}
-                            </dd>
-                          </dl>
-                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-text-secondary mb-1">
+                          Unique Users
+                        </p>
+                        <p className="text-2xl font-bold text-text-primary">
+                          {formatNumber(networkStats.uniqueUsers)}
+                        </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-bg-secondary overflow-hidden shadow rounded-lg">
-                    <div className="p-5">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                            <span className="text-white text-sm font-medium">
-                              F
-                            </span>
-                          </div>
+                  {/* Total Fills */}
+                  <div className="bg-bg-secondary border border-card-border rounded-lg p-6 hover:shadow-md transition-all duration-200 hover:border-accent-purple/30">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-gradient-to-br from-accent-purple to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
+                          <svg
+                            className="w-6 h-6 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M13 10V3L4 14h7v7l9-11h-7z"
+                            />
+                          </svg>
                         </div>
-                        <div className="ml-5 w-0 flex-1">
-                          <dl>
-                            <dt className="text-sm font-medium text-text-secondary truncate">
-                              Total Fills
-                            </dt>
-                            <dd className="text-lg font-medium text-text-primary">
-                              {formatNumber(networkStats.totalFills || 0)}
-                            </dd>
-                          </dl>
-                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-text-secondary mb-1">
+                          Total Fills
+                        </p>
+                        <p className="text-2xl font-bold text-text-primary">
+                          {formatNumber(networkStats.totalFills || 0)}
+                        </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-bg-secondary overflow-hidden shadow rounded-lg">
-                    <div className="p-5">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className="w-8 h-8 bg-orange-500 rounded-md flex items-center justify-center">
-                            <span className="text-white text-sm font-medium">
-                              D
-                            </span>
-                          </div>
+                  {/* Total Deposits */}
+                  <div className="bg-bg-secondary border border-card-border rounded-lg p-6 hover:shadow-md transition-all duration-200 hover:border-accent-yellow/30">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-gradient-to-br from-accent-yellow to-yellow-600 rounded-lg flex items-center justify-center shadow-lg">
+                          <svg
+                            className="w-6 h-6 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+                            />
+                          </svg>
                         </div>
-                        <div className="ml-5 w-0 flex-1">
-                          <dl>
-                            <dt className="text-sm font-medium text-text-secondary truncate">
-                              Total Deposits
-                            </dt>
-                            <dd className="text-lg font-medium text-text-primary">
-                              {formatNumber(networkStats.totalDeposits || 0)}
-                            </dd>
-                          </dl>
-                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-text-secondary mb-1">
+                          Total Deposits
+                        </p>
+                        <p className="text-2xl font-bold text-text-primary">
+                          {formatNumber(networkStats.totalDeposits || 0)}
+                        </p>
                       </div>
                     </div>
                   </div>
