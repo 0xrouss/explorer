@@ -1,6 +1,16 @@
 import { cookieStorage, createStorage, http } from "@wagmi/core";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import {
+  scroll,
+  mainnet,
+  polygon,
+  arbitrum,
+  optimism,
+  bsc,
+  avalanche,
+  base,
+  kaia,
+  sophon,
   sepolia,
   optimismSepolia,
   polygonAmoy,
@@ -17,6 +27,16 @@ if (!projectId) {
 }
 
 export const networks = [
+  mainnet,
+  polygon,
+  arbitrum,
+  avalanche,
+  base,
+  scroll,
+  kaia,
+  bsc,
+  sophon,
+  optimism,
   sepolia,
   optimismSepolia,
   polygonAmoy,

@@ -266,7 +266,7 @@ export default function HomePage() {
         {/* Search and Filters */}
         <div className="mb-6">
           <div className="bg-card-bg shadow rounded-lg p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+            <div className="flex items-center justify-between gap-4">
               <div className="flex-1 max-w-md">
                 <SearchBar
                   value={searchQuery}

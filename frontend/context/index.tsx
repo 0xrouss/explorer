@@ -4,15 +4,26 @@ import { wagmiAdapter, projectId } from "@/config";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createAppKit } from "@reown/appkit/react";
 import {
+  mainnet,
+  optimism,
+  arbitrum,
+  avalanche,
+  base,
+  scroll,
+  kaia,
+  bsc,
+  sophon,
   sepolia,
   optimismSepolia,
   polygonAmoy,
   arbitrumSepolia,
   baseSepolia,
   monadTestnet,
+  polygon,
 } from "@reown/appkit/networks";
 import React, { type ReactNode } from "react";
 import { cookieToInitialState, WagmiProvider, type Config } from "wagmi";
+import { NexusProvider } from "@avail-project/nexus-widgets";
 
 // Set up queryClient
 const queryClient = new QueryClient();
@@ -34,6 +45,16 @@ const modal = createAppKit({
   adapters: [wagmiAdapter],
   projectId,
   networks: [
+    polygon,
+    mainnet,
+    optimism,
+    arbitrum,
+    avalanche,
+    base,
+    scroll,
+    kaia,
+    bsc,
+    sophon,
     sepolia,
     optimismSepolia,
     polygonAmoy,
@@ -41,7 +62,7 @@ const modal = createAppKit({
     baseSepolia,
     monadTestnet,
   ],
-  defaultNetwork: sepolia,
+  defaultNetwork: mainnet,
   metadata: metadata,
   features: {
     analytics: true, // Optional - defaults to your Cloud configuration
@@ -65,7 +86,11 @@ function ContextProvider({
       config={wagmiAdapter.wagmiConfig as Config}
       initialState={initialState}
     >
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <NexusProvider config={{ network: "testnet", debug: false }}>
+          {children}
+        </NexusProvider>
+      </QueryClientProvider>
     </WagmiProvider>
   );
 }

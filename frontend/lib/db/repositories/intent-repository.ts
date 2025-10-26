@@ -449,11 +449,17 @@ export class IntentRepository {
     const db = dbManager.getClient(network);
     const sql = db.getClient();
 
+    // Normalize the address for consistent matching
+    const normalizedAddress = signatureAddress.toLowerCase().trim();
+    const addressWithPrefix = normalizedAddress.startsWith("0x")
+      ? normalizedAddress
+      : `0x${normalizedAddress}`;
+
     return (await sql`
       SELECT DISTINCT i.*, s.address as signature_address
       FROM intents i
       JOIN intent_signature_data s ON i.id = s.intent_id
-      WHERE s.address = ${signatureAddress}
+      WHERE LOWER(s.address) = LOWER(${addressWithPrefix})
       ORDER BY i.id DESC 
       LIMIT ${limit} 
       OFFSET ${offset}
@@ -470,11 +476,17 @@ export class IntentRepository {
     const db = dbManager.getClient(network);
     const sql = db.getClient();
 
+    // Normalize the address for consistent matching
+    const normalizedAddress = signatureAddress.toLowerCase().trim();
+    const addressWithPrefix = normalizedAddress.startsWith("0x")
+      ? normalizedAddress
+      : `0x${normalizedAddress}`;
+
     const result = (await sql`
       SELECT COUNT(DISTINCT i.id) as count
       FROM intents i
       JOIN intent_signature_data s ON i.id = s.intent_id
-      WHERE s.address = ${signatureAddress}
+      WHERE LOWER(s.address) = LOWER(${addressWithPrefix})
     `) as Array<{ count: number }>;
 
     return Number(result[0]?.count || 0);
@@ -492,22 +504,28 @@ export class IntentRepository {
     const db = dbManager.getClient(network);
     const sql = db.getClient();
 
-    // Try to parse as intent ID first
-    const intentId = parseInt(query, 10);
+    // Check if query is a pure numeric string (intent ID)
+    const trimmedQuery = query.trim();
+    const isNumericOnly = /^\d+$/.test(trimmedQuery);
 
-    if (!isNaN(intentId)) {
+    if (isNumericOnly) {
+      const intentId = parseInt(trimmedQuery, 10);
+      console.log("Searching by intent ID", intentId);
       // Search by intent ID
       return (await sql`
         SELECT * FROM intents 
         WHERE id = ${intentId}
       `) as IntentRow[];
     } else {
-      // Search by signature address
+      // Search by signature address - normalize the query
+      const normalizedQuery = trimmedQuery.toLowerCase();
+      // Use case-insensitive search with LIKE for partial matching
+      console.log("Searching by signature address", normalizedQuery);
       return (await sql`
         SELECT DISTINCT i.*
         FROM intents i
         JOIN intent_signature_data s ON i.id = s.intent_id
-        WHERE s.address = ${query}
+        WHERE LOWER(s.address) LIKE LOWER(${`%${normalizedQuery}%`})
         ORDER BY i.id DESC 
         LIMIT ${limit} 
         OFFSET ${offset}
