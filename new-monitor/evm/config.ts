@@ -27,6 +27,7 @@ export interface ChainConfig {
   chainId: number;
   name: string;
   rpcUrl: string;
+  wsRpcUrl?: string;
   contractAddress: `0x${string}`;
   deploymentBlock: bigint; // Block where contract was deployed
   batchSize: number; // Number of blocks to fetch per batch
@@ -45,6 +46,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.ETH_RPC_URL ||
         mainnet.rpcUrls.default.http[0] ||
         "https://eth.merkle.io",
+      wsRpcUrl: process.env.ETH_WS_URL,
       contractAddress: "0xbada557252d286e45a1ad73f32479062d4e2e86b",
       deploymentBlock: 22638037n,
       batchSize: 1000,
@@ -56,6 +58,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.OP_RPC_URL ||
         optimism.rpcUrls.default.http[0] ||
         "https://mainnet.optimism.io",
+      wsRpcUrl: process.env.OP_WS_URL,
       contractAddress: "0xbada557252d286e45a1ad73f32479062d4e2e86b",
       deploymentBlock: 136761101n,
       batchSize: 2000,
@@ -67,6 +70,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.POLYGON_RPC_URL ||
         "https://polygon.drpc.org" ||
         "https://polygon-rpc.com",
+      wsRpcUrl: process.env.POLYGON_WS_URL,
       contractAddress: "0xbada557252d286e45a1ad73f32479062d4e2e86b",
       deploymentBlock: 72390505n,
       batchSize: 1000,
@@ -78,6 +82,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.ARB_RPC_URL ||
         arbitrum.rpcUrls.default.http[0] ||
         "https://arb1.arbitrum.io/rpc",
+      wsRpcUrl: process.env.ARB_WS_URL,
       contractAddress: "0xbada557252d286e45a1ad73f32479062d4e2e86b",
       deploymentBlock: 344140700n,
       batchSize: 2000,
@@ -89,6 +94,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.AVAX_RPC_URL ||
         avalanche.rpcUrls.default.http[0] ||
         "https://api.avax.network/ext/bc/C/rpc",
+      wsRpcUrl: process.env.AVAX_WS_URL,
       contractAddress: "0xbada557252d286e45a1ad73f32479062d4e2e86b",
       deploymentBlock: 63342869n,
       batchSize: 1000,
@@ -100,6 +106,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.BASE_RPC_URL ||
         base.rpcUrls.default.http[0] ||
         "https://mainnet.base.org",
+      wsRpcUrl: process.env.BASE_WS_URL,
       contractAddress: "0xbada557252d286e45a1ad73f32479062d4e2e86b",
       deploymentBlock: 31165948n,
       batchSize: 2000,
@@ -111,6 +118,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.SCROLL_RPC_URL ||
         scroll.rpcUrls.default.http[0] ||
         "https://rpc.scroll.io",
+      wsRpcUrl: process.env.SCROLL_WS_URL,
       contractAddress: "0xbada557252d286e45a1ad73f32479062d4e2e86b",
       deploymentBlock: 16240320n,
       batchSize: 1000,
@@ -122,6 +130,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.KAIA_RPC_URL ||
         kaia.rpcUrls.default.http[0] ||
         "https://public-en.node.kaia.io",
+      wsRpcUrl: process.env.KAIA_WS_URL,
       contractAddress: "0xbada557252d286e45a1ad73f32479062d4e2e86b",
       deploymentBlock: 187763965n,
       batchSize: 1000,
@@ -133,6 +142,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.BNB_RPC_URL ||
         bsc.rpcUrls.default.http[0] ||
         "https://bsc-dataseed.binance.org",
+      wsRpcUrl: process.env.BNB_WS_URL,
       contractAddress: "0xbada557252d286e45a1ad73f32479062d4e2e86b",
       deploymentBlock: 54212157n,
       batchSize: 2000,
@@ -141,6 +151,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
       chainId: 999,
       name: "HyperEVM",
       rpcUrl: process.env.HYPEREVM_RPC_URL || "https://rpc.hyperliquid.xyz/evm",
+      wsRpcUrl: process.env.HYPEREVM_WS_URL,
       contractAddress: "0xbada557252d286e45a1ad73f32479062d4e2e86b",
       deploymentBlock: 5046389n,
       batchSize: 500,
@@ -152,6 +163,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.SOPHON_RPC_URL ||
         "https://monad-testnet.drpc.org" ||
         "https://rpc.sophon.xyz",
+      wsRpcUrl: process.env.SOPHON_WS_URL,
       contractAddress: "0xB61fAdeBccCb15823b64bf47829d32eeb4A08930",
       deploymentBlock: 14035974n,
       batchSize: 1000,
@@ -166,6 +178,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.SEPOLIA_RPC_URL ||
         sepolia.rpcUrls.default.http[0] ||
         "https://rpc.sepolia.org",
+      wsRpcUrl: process.env.SEPOLIA_WS_URL,
       contractAddress: "0xf0111ede031a4377c34a4ad900f1e633e41055dc",
       deploymentBlock: 8693649n,
       batchSize: 10000,
@@ -177,6 +190,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.OP_SEPOLIA_RPC_URL ||
         optimismSepolia.rpcUrls.default.http[0] ||
         "https://sepolia.optimism.io",
+      wsRpcUrl: process.env.OP_SEPOLIA_WS_URL,
       contractAddress: "0xf0111ede031a4377c34a4ad900f1e633e41055dc",
       deploymentBlock: 29173735n,
       batchSize: 10000,
@@ -188,6 +202,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.POLYGON_AMOY_RPC_URL ||
         polygonAmoy.rpcUrls.default.http[0] ||
         "https://rpc-amoy.polygon.technology",
+      wsRpcUrl: process.env.POLYGON_AMOY_WS_URL,
       contractAddress: "0xf0111ede031a4377c34a4ad900f1e633e41055dc",
       deploymentBlock: 22952669n,
       batchSize: 2000,
@@ -199,6 +214,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.ARB_SEPOLIA_RPC_URL ||
         arbitrumSepolia.rpcUrls.default.http[0] ||
         "https://sepolia-rollup.arbitrum.io/rpc",
+      wsRpcUrl: process.env.ARB_SEPOLIA_WS_URL,
       contractAddress: "0xf0111ede031a4377c34a4ad900f1e633e41055dc",
       deploymentBlock: 164399754n,
       batchSize: 10000,
@@ -210,6 +226,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.BASE_SEPOLIA_RPC_URL ||
         baseSepolia.rpcUrls.default.http[0] ||
         "https://sepolia.base.org",
+      wsRpcUrl: process.env.BASE_SEPOLIA_WS_URL,
       contractAddress: "0xf0111ede031a4377c34a4ad900f1e633e41055dc",
       deploymentBlock: 27190885n,
       batchSize: 10000,
@@ -221,6 +238,7 @@ export const CHAIN_CONFIGS: Record<NetworkName, ChainConfig[]> = {
         process.env.MONAD_TESTNET_RPC_URL ||
         monadTestnet.rpcUrls.default.http[0] ||
         "https://testnet.monad.xyz/rpc",
+      wsRpcUrl: process.env.MONAD_TESTNET_WS_URL,
       contractAddress: "0xf0111ede031a4377c34a4ad900f1e633e41055dc",
       deploymentBlock: 33387114n,
       batchSize: 1000,

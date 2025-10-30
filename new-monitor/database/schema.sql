@@ -124,6 +124,13 @@ CREATE TABLE IF NOT EXISTS evm_deposit_events (
     UNIQUE(tx_hash, log_index)
 );
 
+-- Sync state per EVM chain (cursor for last checked block)
+CREATE TABLE IF NOT EXISTS evm_sync_state (
+    chain_id BIGINT PRIMARY KEY,
+    last_checked_block BIGINT NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- ============================================================================
 -- INDEXES
 -- ============================================================================
@@ -177,6 +184,9 @@ CREATE INDEX IF NOT EXISTS idx_evm_deposit_events_tx_hash ON evm_deposit_events(
 CREATE INDEX IF NOT EXISTS idx_evm_deposit_events_block_number ON evm_deposit_events(block_number);
 CREATE INDEX IF NOT EXISTS idx_evm_deposit_events_from_address ON evm_deposit_events(from_address);
 CREATE INDEX IF NOT EXISTS idx_evm_deposit_events_created_at ON evm_deposit_events(created_at);
+
+-- Sync state indexes
+CREATE INDEX IF NOT EXISTS idx_evm_sync_state_updated_at ON evm_sync_state(updated_at);
 
 -- ============================================================================
 -- TRIGGERS

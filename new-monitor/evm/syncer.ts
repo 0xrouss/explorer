@@ -6,12 +6,14 @@
 import {
   createPublicClient,
   http,
+  webSocket,
   type PublicClient,
   type Log,
   decodeEventLog,
   parseAbiItem,
 } from "viem";
 import type { ChainConfig } from "./config";
+import { EVENT_SIGNATURES } from "./config";
 import type { FillEvent, DepositEvent, SyncResult } from "./types";
 
 // Event ABIs
@@ -29,6 +31,8 @@ const DEPOSIT_EVENT_ABI = parseAbiItem(
  */
 export class EvmChainSyncer {
   private client: PublicClient;
+  private wsClient?: PublicClient;
+  private unwatchers: Array<() => void> = [];
   private chainConfig: ChainConfig;
   private readonly BATCH_DELAY_MS = 100; // 100ms delay between batches to avoid rate limits
 
@@ -41,6 +45,12 @@ export class EvmChainSyncer {
         retryDelay: 2000, // 2 second delay between retries (exponential backoff handled by Viem)
       }),
     });
+
+    if (chainConfig.wsRpcUrl) {
+      this.wsClient = createPublicClient({
+        transport: webSocket(chainConfig.wsRpcUrl),
+      });
+    }
   }
 
   /**
@@ -182,7 +192,8 @@ export class EvmChainSyncer {
     toBlock: bigint,
     onBatchComplete: (
       fills: FillEvent[],
-      deposits: DepositEvent[]
+      deposits: DepositEvent[],
+      batchEndBlock: bigint
     ) => Promise<void>
   ): Promise<{ totalFills: number; totalDeposits: number }> {
     let totalFills = 0;
@@ -217,10 +228,8 @@ export class EvmChainSyncer {
       const fills = fillLogs.map((log) => this.parseFillEvent(log));
       const deposits = depositLogs.map((log) => this.parseDepositEvent(log));
 
-      // Call the callback to store this batch immediately
-      if (fills.length > 0 || deposits.length > 0) {
-        await onBatchComplete(fills, deposits);
-      }
+      // Always notify caller of batch completion so state can advance
+      await onBatchComplete(fills, deposits, currentTo);
 
       totalFills += fills.length;
       totalDeposits += deposits.length;
@@ -335,6 +344,131 @@ export class EvmChainSyncer {
    */
   getClient(): PublicClient {
     return this.client;
+  }
+
+  /**
+   * Whether realtime WS is supported for this chain
+   */
+  isRealtimeSupported(): boolean {
+    return !!this.wsClient;
+  }
+
+  /**
+   * Start realtime subscriptions for Fill and Deposit events.
+   * Returns a function to stop all subscriptions.
+   */
+  startRealtime(
+    onEvents: (
+      fills: FillEvent[],
+      deposits: DepositEvent[],
+      latestBlock: bigint
+    ) => Promise<void>
+  ): () => void {
+    if (!this.wsClient) {
+      console.warn(
+        `[${this.chainConfig.name}] WS not configured; realtime disabled`
+      );
+      return () => {};
+    }
+
+    const ws = this.wsClient;
+    const address = this.chainConfig.contractAddress;
+
+    const unwatchFill = ws.watchContractEvent({
+      address,
+      abi: [FILL_EVENT_ABI],
+      strict: true,
+      onLogs: async (logs) => {
+        const fills = (logs as any[])
+          .map((l) => {
+            const anyLog = l as any;
+            if (anyLog && anyLog.args) {
+              return {
+                requestHash: anyLog.args.requestHash as `0x${string}`,
+                from: anyLog.args.from as `0x${string}`,
+                solver: anyLog.args.solver as `0x${string}`,
+                txHash: anyLog.transactionHash as `0x${string}`,
+                blockNumber: anyLog.blockNumber as bigint,
+                logIndex: Number(anyLog.logIndex) as number,
+                chainId: this.chainConfig.chainId,
+              } as FillEvent;
+            }
+            try {
+              const raw = l as Log;
+              if (!raw?.topics || raw.topics[0] !== EVENT_SIGNATURES.FILL)
+                return null;
+              return this.parseFillEvent(raw);
+            } catch {
+              return null;
+            }
+          })
+          .filter((e): e is FillEvent => e !== null);
+        const latestBlock = fills.reduce<bigint>(
+          (m, e) => (e.blockNumber > m ? e.blockNumber : m),
+          0n
+        );
+        await onEvents(fills, [], latestBlock);
+      },
+      onError: (err) => {
+        console.error(
+          `[${this.chainConfig.name}] WS fill subscription error:`,
+          err
+        );
+      },
+    });
+
+    const unwatchDeposit = ws.watchContractEvent({
+      address,
+      abi: [DEPOSIT_EVENT_ABI],
+      strict: true,
+      onLogs: async (logs) => {
+        const deposits = (logs as any[])
+          .map((l) => {
+            const anyLog = l as any;
+            if (anyLog && anyLog.args) {
+              return {
+                requestHash: anyLog.args.requestHash as `0x${string}`,
+                from: anyLog.args.from as `0x${string}`,
+                gasRefunded: anyLog.args.gasRefunded as boolean,
+                txHash: anyLog.transactionHash as `0x${string}`,
+                blockNumber: anyLog.blockNumber as bigint,
+                logIndex: Number(anyLog.logIndex) as number,
+                chainId: this.chainConfig.chainId,
+              } as DepositEvent;
+            }
+            try {
+              const raw = l as Log;
+              if (!raw?.topics || raw.topics[0] !== EVENT_SIGNATURES.DEPOSIT)
+                return null;
+              return this.parseDepositEvent(raw);
+            } catch {
+              return null;
+            }
+          })
+          .filter((e): e is DepositEvent => e !== null);
+        const latestBlock = deposits.reduce<bigint>(
+          (m, e) => (e.blockNumber > m ? e.blockNumber : m),
+          0n
+        );
+        await onEvents([], deposits, latestBlock);
+      },
+      onError: (err) => {
+        console.error(
+          `[${this.chainConfig.name}] WS deposit subscription error:`,
+          err
+        );
+      },
+    });
+
+    this.unwatchers.push(unwatchFill, unwatchDeposit);
+
+    return () => {
+      try {
+        for (const unwatch of this.unwatchers) unwatch();
+      } finally {
+        this.unwatchers = [];
+      }
+    };
   }
 }
 

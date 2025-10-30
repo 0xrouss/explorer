@@ -6,6 +6,7 @@ import {
   DepositRepository,
   EvmFillRepository,
   EvmDepositRepository,
+  EvmSyncStateRepository,
   type IntentRow,
 } from "./database";
 import {
@@ -30,8 +31,10 @@ export class Monitor {
   private evmDepositRepo: EvmDepositRepository;
   private evmSyncers: Map<number, EvmChainSyncer>;
   private chainConfigs: ChainConfig[];
+  private evmSyncStateRepo: EvmSyncStateRepository;
+  private evmRealtimeUnwatchers: Map<number, () => void> = new Map();
   private isRunning = false;
-  private pollIntervalMs = 10000; // 10 seconds
+  private pollIntervalMs = 1000; // 10 seconds
 
   constructor(network: NetworkName, databaseUrl: string) {
     this.network = network;
@@ -42,6 +45,7 @@ export class Monitor {
     this.depositRepo = new DepositRepository(this.db);
     this.evmFillRepo = new EvmFillRepository(this.db);
     this.evmDepositRepo = new EvmDepositRepository(this.db);
+    this.evmSyncStateRepo = new EvmSyncStateRepository(this.db);
 
     // Initialize EVM syncers for this network
     this.chainConfigs = getChainsForNetwork(network);
@@ -62,12 +66,17 @@ export class Monitor {
     await this.db.connect();
     console.log(`[${this.network}] ✓ Connected to database`);
 
-    // Check if tables exist, run migrations if needed
-    const tablesExist = await this.db.checkTablesExist();
-    if (!tablesExist) {
-      console.log(`[${this.network}] Running database migrations...`);
-      await this.db.runMigrations();
-      console.log(`[${this.network}] ✓ Migrations completed`);
+    // Always run migrations (idempotent) to ensure new tables (e.g., evm_sync_state) exist remotely
+    console.log(`[${this.network}] Running database migrations...`);
+    await this.db.runMigrations();
+    console.log(`[${this.network}] ✓ Migrations completed`);
+
+    // Backfill evm_sync_state from existing events (sets cursor to greatest known block per chain)
+    const backfilled = await this.evmSyncStateRepo.backfillFromExistingEvents();
+    if (backfilled > 0) {
+      console.log(
+        `[${this.network}] ✓ Backfilled evm_sync_state for ${backfilled} chain(s)`
+      );
     }
 
     console.log(`[${this.network}] ✓ Monitor initialized`);
@@ -702,6 +711,7 @@ export class Monitor {
   stopMonitoring(): void {
     console.log(`[${this.network}] Stopping monitoring loop...`);
     this.isRunning = false;
+    this.stopEvmRealtime();
   }
 
   /**
@@ -992,19 +1002,34 @@ export class Monitor {
       // If toBlock not specified, get current block
       const currentBlock = toBlock || (await syncer.getCurrentBlockNumber());
 
-      // If fromBlock not specified, get last synced block from database
-      const lastSyncedFillBlock =
-        fromBlock || (await this.evmFillRepo.getMaxBlockNumber(chainId));
-      const lastSyncedDepositBlock =
-        fromBlock || (await this.evmDepositRepo.getMaxBlockNumber(chainId));
+      // Determine starting block:
+      // 1) Prefer persisted sync cursor if exists
+      // 2) Else fall back to min of max blocks from event tables
+      let startBlock: bigint;
+      if (fromBlock) {
+        startBlock = fromBlock;
+      } else {
+        const [cursor, lastSyncedFillBlock, lastSyncedDepositBlock] =
+          await Promise.all([
+            this.evmSyncStateRepo.getLastCheckedBlock(chainId),
+            this.evmFillRepo.getMaxBlockNumber(chainId),
+            this.evmDepositRepo.getMaxBlockNumber(chainId),
+          ]);
 
-      // Use the minimum of the two (or deployment block if both are 0)
-      const startBlock =
-        lastSyncedFillBlock === 0n && lastSyncedDepositBlock === 0n
-          ? config.deploymentBlock
-          : lastSyncedFillBlock < lastSyncedDepositBlock
-          ? lastSyncedFillBlock
-          : lastSyncedDepositBlock;
+        if (cursor !== null) {
+          startBlock = cursor;
+        } else if (
+          lastSyncedFillBlock === 0n &&
+          lastSyncedDepositBlock === 0n
+        ) {
+          startBlock = config.deploymentBlock;
+        } else {
+          startBlock =
+            lastSyncedFillBlock < lastSyncedDepositBlock
+              ? lastSyncedFillBlock
+              : lastSyncedDepositBlock;
+        }
+      }
 
       // Don't sync if we're already up to date
       if (startBlock >= currentBlock) {
@@ -1030,7 +1055,7 @@ export class Monitor {
       const { totalFills, totalDeposits } = await syncer.fetchAndProcessBatches(
         actualFromBlock,
         currentBlock,
-        async (fills, deposits) => {
+        async (fills, deposits, batchEndBlock) => {
           // Store this batch immediately
           if (fills.length > 0) {
             await this.evmFillRepo.upsertFillEvents(fills);
@@ -1038,6 +1063,12 @@ export class Monitor {
           if (deposits.length > 0) {
             await this.evmDepositRepo.upsertDepositEvents(deposits);
           }
+
+          // Advance sync cursor regardless of whether events were found
+          await this.evmSyncStateRepo.upsertLastCheckedBlock(
+            chainId,
+            batchEndBlock
+          );
         }
       );
 
@@ -1141,11 +1172,15 @@ export class Monitor {
     }
     console.log();
 
-    return {
+    const summary = {
       totalFillEvents,
       totalDepositEvents,
       results,
     };
+
+    // After initial backfill, enable realtime WS where supported
+    this.startEvmRealtime();
+    return summary;
   }
 
   /**
@@ -1156,6 +1191,10 @@ export class Monitor {
     totalDepositEvents: number;
   }> {
     try {
+      // If realtime is active, skip polling update
+      if (this.evmRealtimeUnwatchers.size > 0) {
+        return { totalFillEvents: 0, totalDepositEvents: 0 };
+      }
       const result = await this.syncAllEvmChains();
       return {
         totalFillEvents: result.totalFillEvents,
@@ -1168,6 +1207,69 @@ export class Monitor {
         totalDepositEvents: 0,
       };
     }
+  }
+
+  /**
+   * Start realtime EVM subscriptions (WS) for all chains that support it
+   */
+  startEvmRealtime(): void {
+    for (const [chainId, syncer] of this.evmSyncers.entries()) {
+      const config = syncer.getChainConfig();
+      if (!syncer.isRealtimeSupported()) {
+        console.log(
+          `[${this.network}/${config.name}] WS not supported; staying on polling`
+        );
+        continue;
+      }
+
+      if (this.evmRealtimeUnwatchers.has(chainId)) continue;
+
+      const unwatch = syncer.startRealtime(
+        async (fills, deposits, latestBlock) => {
+          // Validate and persist events and advance cursor
+          const validFills = fills.filter(
+            (e: any) =>
+              e &&
+              typeof e.solver === "string" &&
+              typeof e.gasRefunded === "undefined"
+          );
+          const validDeposits = deposits.filter(
+            (e: any) =>
+              e &&
+              typeof e.gasRefunded === "boolean" &&
+              typeof e.solver === "undefined"
+          );
+
+          if (validFills.length > 0)
+            await this.evmFillRepo.upsertFillEvents(validFills);
+          if (validDeposits.length > 0)
+            await this.evmDepositRepo.upsertDepositEvents(validDeposits);
+          if (latestBlock && latestBlock > 0n) {
+            await this.evmSyncStateRepo.upsertLastCheckedBlock(
+              chainId,
+              latestBlock
+            );
+          }
+        }
+      );
+
+      this.evmRealtimeUnwatchers.set(chainId, unwatch);
+      console.log(`[${this.network}/${config.name}] ✓ Realtime WS subscribed`);
+    }
+  }
+
+  /**
+   * Stop realtime EVM subscriptions
+   */
+  stopEvmRealtime(): void {
+    for (const [chainId, unwatch] of this.evmRealtimeUnwatchers.entries()) {
+      try {
+        unwatch();
+      } catch (e) {
+        // noop
+      }
+    }
+    this.evmRealtimeUnwatchers.clear();
   }
 
   /**
